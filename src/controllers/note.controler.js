@@ -62,7 +62,7 @@ const updateNote = async (req, res) => {
     const { title, content, tag, isPinned } = req.body; // Get new data from the request body
     const userId = req.userId; // User ID from the token (set by middleware)
 
-    if (!title && !content && !tag && isPinned === undefined) {
+    if (!title && !content && !tag && isPinned) {
       return res.status(400).json({ message: "No change provided" });
     }
 
@@ -82,7 +82,7 @@ const updateNote = async (req, res) => {
     if (title) note.title = title;
     if (content) note.content = content;
     if (tag) note.tag = tag;
-    if (isPinned !== undefined) note.isPinned = isPinned;
+    if (isPinned) note.isPinned = isPinned;
 
     await note.save();
 
@@ -132,33 +132,46 @@ const deleteNote = async (req, res) => {
   }
 };
 
-const updateNotePind = async (req, res) => {
+const updateNotePinned = async (req, res) => {
   try {
-    const nodeId = req.params.userId;
-    const { isPinned } = req.body;
-    const { userId } = req.userId;
+    const noteId = req.params.noteId; // Correct parameter name
+    const { isPinned } = req.body; // Extract isPinned from request body
+    const userId = req.userId; // Ensure correct user ID retrieval
 
-    const note = await new NoteModel.findOne({ _id: nodeId, userId });
+    if (typeof isPinned !== "boolean") {
+      return res.status(400).json({ message: "Invalid isPinned value", status: false });
+    }
 
-    if (!note) return res.status(404).json({ message: "Not found!" });
+    // Find the note with matching noteId and userId
+    const note = await NoteModel.findOne({ _id: noteId, userId });
 
-    if (isPinned) note.isPinned = isPinned || false;
+    if (!note) {
+      return res.status(404).json({ message: "Note not found", status: false });
+    }
 
-    await note.save();
+    // Update the isPinned field
+    note.isPinned = isPinned;
+    await note.save(); // Save the updated note
 
-    return res
-      .status(200)
-      .json({ message: "Update pind successfully!", status: true, data: note });
+    return res.status(200).json({
+      message: "Note pinned status updated successfully!",
+      status: true,
+      data: note,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Internal server error", status: false });
+    console.error("Update Note Error:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      status: false,
+      error: error.message,
+    });
   }
 };
 
+
 const searchNote = async (req, res) => {
   try {
-    const user = req.user;
+    const userId = req.userId;
     const query = req.query;
 
     if (!query) {
@@ -166,20 +179,18 @@ const searchNote = async (req, res) => {
     }
 
     const matchingNote = await NoteModel.find({
-      userId: user._id,
+      userId: userId,
       $or: [
         { title: { $regex: new RegExp(query, "i") } },
         { content: { $regex: new RegExp(query, "i") } },
       ],
     });
 
-    return res
-      .status(200)
-      .json({
-        message: "Note is matching to search!",
-        matchingNote,
-        error: false,
-      });
+    return res.status(200).json({
+      message: "Note is matching to search!",
+      matchingNote,
+      status: true,
+    });
   } catch (error) {
     return res
       .status(500)
@@ -192,6 +203,6 @@ module.exports = {
   readNote,
   updateNote,
   deleteNote,
-  updateNotePind,
+  updateNotePinned,
   searchNote,
 };
